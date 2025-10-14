@@ -1,0 +1,84 @@
+{
+  "defaults": {
+    "distribution": 1,
+    "event_threat_level_id": 2,
+    "event_analysis": 0,
+    "tlp": "amber",
+    "base_tags": [
+      "automated:source=\"fw-mail\"",
+      "red-nacional-soc:status=\"ongoing\"",
+      "sector=\"energia\""
+    ]
+  },
+  "brute_force": {
+    "short_desc": "Intento de fuerza bruta",
+    "attr_template": "IOC extraído de alerta '{Message}'. IP Origen: {Src. IP}, Puerto Dst: {Dst. Port}",
+    "tags": [
+      "detection:bruteforce"
+    ],
+    "mitre_id": "T1110",
+    "workflow_state": "incomplete",
+    "workflow_todo": "add-context",
+    "threat_actor": "Unknown",
+    "misp_type": "ip-src",
+    "category": "Network activity",
+    "to_ids": 1
+  },
+  "auth_failed": {
+    "short_desc": "Acceso denegado por credenciales inválidas",
+    "attr_template": "IOC extraído de alerta '{Message}'. IP Origen: {Src. IP}",
+    "tags": [
+      "detection:auth-failed"
+    ],
+    "mitre_id": "T1110",
+    "workflow_state": "incomplete",
+    "workflow_todo": "add-context",
+    "threat_actor": "Unknown",
+    "misp_type": "ip-src",
+    "category": "Network activity",
+    "to_ids": 1
+  },
+  "geo_block": {
+    "short_desc": "Bloqueo geográfico",
+    "attr_template": "IOC extraído de alerta '{Message}'. IP Origen: {Src. IP}",
+    "tags": [
+      "detection:geo-block"
+    ],
+    "mitre_id": "T1090.002",
+    "workflow_state": "complete",
+    "workflow_todo": "no-action-required",
+    "threat_actor": "Unknown",
+    "misp_type": "ip-src",
+    "category": "Network activity",
+    "to_ids": 0
+  },
+  "vuln_exploit": {
+    "short_desc": "Explotación de vulnerabilidad",
+    "attr_template": "IOC extraído de alerta '{Message}'. IP Origen: {Src. IP}, IP Dst: {Dst. IP}, Puerto Dst: {Dst. Port}",
+    "tags": [
+      "detection:exploit"
+    ],
+    "mitre_id": "T1190",
+    "tlp": "amber",
+    "workflow_state": "incomplete",
+    "workflow_todo": "enrichment",
+    "threat_actor": "UNC1878",
+    "misp_type": "ip-src",
+    "category": "Network activity",
+    "to_ids": 1
+  },
+  "port_scan": {
+    "short_desc": "Escaneo de puertos",
+    "attr_template": "IOC extraído de alerta '{Message}'. IP Origen: {Src. IP}",
+    "tags": [
+      "detection:port-scan"
+    ],
+    "mitre_id": "T1595.002",
+    "workflow_state": "incomplete",
+    "workflow_todo": "add-context",
+    "threat_actor": "Unknown",
+    "misp_type": "ip-src",
+    "category": "Network activity",
+    "to_ids": 0
+  }
+}

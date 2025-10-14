@@ -1,0 +1,10 @@
+[Unit]
+Description=Run MISP Mail Ingestor every 10 minutes
+
+[Timer]
+# Se ejecuta cada 10 minutos
+OnCalendar=*:0/10
+Persistent=true
+
+[Install]
+WantedBy=timers.target

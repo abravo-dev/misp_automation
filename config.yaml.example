@@ -1,0 +1,56 @@
+# ----------------- IMAP Configuration -----------------
+IMAP:
+  HOST: "imap.example.com"
+  USER: "alerts@example.com"
+  MAILBOX: "INBOX"
+  PORT: 993
+  SSL_VERIFY: true
+# La contraseña de IMAP se debe definir en la variable de entorno IMAP_PASS
+
+# ----------------- MISP Configuration -----------------
+MISP:
+  URL: "https://127.0.0.1"
+  VERIFY_SSL: true
+  RATE_SLEEP: 0.3
+# La API key de MISP se debe definir en la variable de entorno MISP_API_KEY
+
+# ----------------- CSV Processing -----------------
+CSV_HEADER_ALIASES:
+  message: ["Message", "Msg", "Mensaje"]
+  src_ip: ["Src. IP", "Source IP", "Src IP", "SrcIP", "Origen IP"]
+  dst_ip: ["Dst. IP", "Destination IP", "Dst IP", "DstIP", "Destino IP"]
+  dst_port: ["Dst. Port", "Destination Port", "Dst Port", "DPort", "Puerto Dst"]
+
+# ----------------- Enrichment Services -----------------
+GEOIP:
+  DB_PATH: "/usr/share/GeoIP/GeoLite2-Country.mmdb"
+  EXCLUDE_COUNTRIES: ["ES"] # Lista de códigos de país ISO2 a ignorar
+
+ABUSEIPDB:
+  ENABLED: true
+  API_KEY_ENV: "ABUSEIPDB_API_KEY" # Variable de entorno con la API key
+  MIN_SCORE_TO_FLAG: 1
+  RATE_SLEEP: 0.8
+  TIMEOUT: 15
+
+# ----------------- Processing Policy -----------------
+POLICY:
+  MAX_ATTRS_PER_EVENT: 120
+  ADD_DST_IP: true # Añadir Dst. IP como atributo ip-dst
+  # Rangos de IPs (notación CIDR) a los que no se les aplicará to_ids=1.
+  # Los rangos privados RFC1918 ya se excluyen por defecto.
+  WHITELIST_RANGES:
+    - "100.64.0.0/10" # Carrier-Grade NAT
+    - "8.8.8.8/32"    # Ejemplo de IP específica
+
+# ----------------- State & Logging -----------------
+STATE:
+  DB_PATH: "/var/lib/misp-automation/state.db"
+
+LOGGING:
+  PATH: "/var/log/misp-automation/ingestor.log"
+  AUDIT_PATH: "/var/log/misp-automation/audit.csv"
+
+# ----------------- Scheduler -----------------
+SCHEDULER:
+  INTERVAL_SECONDS: 600 # 10 minutos

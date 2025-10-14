@@ -1,0 +1,27 @@
+[Unit]
+Description=MISP Mail Ingestor Service
+After=network.target
+
+[Service]
+Type=simple
+User=misp-automation
+Group=misp-automation
+
+# Directorio de trabajo del script
+WorkingDirectory=/opt/misp-mail-ingestor
+
+# Comando de ejecución con la opción --once para que el timer lo controle
+ExecStart=/opt/misp-mail-ingestor/venv/bin/python imap_to_misp.py --config config.yaml --once
+
+# Carga las credenciales desde un fichero de entorno
+EnvironmentFile=/etc/default/misp-mail-ingestor
+
+# Medidas de seguridad
+PrivateTmp=true
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
