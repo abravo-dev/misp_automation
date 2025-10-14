@@ -7,15 +7,15 @@ Está diseñado para correr como un servicio `systemd` bajo un usuario sin privi
 ## 🚀 Características
 
 -   **Lectura IMAP**: Se conecta de forma segura a un buzón IMAP y procesa los correos no leídos.
--   [cite_start]**Procesamiento Híbrido**: Extrae IOCs del texto del email y de filas de ficheros CSV adjuntos. [cite: 1]
--   [cite_start]**Clasificación Inteligente**: Usa `mappings.json` para clasificar alertas y generar eventos con contexto (tags, MITRE ATT&CK, etc.). [cite: 2]
--   [cite_start]**Enriquecimiento**: Filtra IPs por país (GeoIP) y enriquece con la puntuación de `AbuseIPDB`. [cite: 86]
--   [cite_start]**Persistencia**: Usa una base de datos SQLite para no procesar el mismo email dos veces. [cite: 3]
+-   **Procesamiento Híbrido**: Extrae IOCs del texto del email y de filas de ficheros CSV adjuntos. [cite: 1]
+-   **Clasificación Inteligente**: Usa `mappings.json` para clasificar alertas y generar eventos con contexto (tags, MITRE ATT&CK, etc.). [cite: 2]
+-   **Enriquecimiento**: Filtra IPs por país (GeoIP) y enriquece con la puntuación de `AbuseIPDB`. [cite: 86]
+-   **Persistencia**: Usa una base de datos SQLite para no procesar el mismo email dos veces. [cite: 3]
 -   **Seguridad**:
     -   Utiliza variables de entorno para las credenciales.
     -   Se ejecuta como un usuario de sistema sin privilegios (`misp-automation`).
-    -   [cite_start]Incluye modo `--dry-run` para simulación. [cite: 3]
-    -   [cite_start]Logs en formato JSON y un log de auditoría en CSV. [cite: 3]
+    -   Incluye modo `--dry-run` para simulación. [cite: 3]
+    -   Logs en formato JSON y un log de auditoría en CSV. [cite: 3]
 
 ## 🔧 Instalación
 
