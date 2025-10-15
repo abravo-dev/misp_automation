@@ -18,7 +18,6 @@ Características clave:
 - Cliente de API MISP robusto con reintentos y manejo de errores.
 - Soporte para ejecución simulada (`--dry-run`).
 """
-
 import os
 import re
 import ssl
@@ -47,13 +46,7 @@ except ImportError:
 
 # ----------------- Logging JSON -----------------
 class JsonLogFormatter(logging.Formatter):
-    """
-    Formateador de logs que convierte los registros en cadenas JSON.
-    """
     def format(self, record: logging.LogRecord) -> str:
-        """
-        Formatea un registro de log como un objeto JSON.
-        """
         payload = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "lvl": record.levelname,
@@ -66,19 +59,25 @@ class JsonLogFormatter(logging.Formatter):
             payload["exc"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)
 
-def setup_logging(log_path: str = None, audit_path: str = None, verbose: bool = False):
-    """
-    Configura el sistema de logging para la aplicación.
-    """
+def setup_logging(log_path: str = None, audit_path: str = None, verbose: bool = False, human_readable: bool = False):
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
-    formatter = JsonLogFormatter()
+    
+    # Formateador para la consola
+    if human_readable:
+        console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    else:
+        console_formatter = JsonLogFormatter()
+        
     sh = logging.StreamHandler(sys.stdout)
-    sh.setFormatter(formatter)
+    sh.setFormatter(console_formatter)
     logger.handlers = [sh]
+
+    # Formateador para el fichero (siempre JSON)
     if log_path:
+        json_formatter = JsonLogFormatter()
         fh = logging.FileHandler(log_path)
-        fh.setFormatter(formatter)
+        fh.setFormatter(json_formatter)
         logger.addHandler(fh)
 
     if audit_path:
@@ -92,24 +91,15 @@ def setup_logging(log_path: str = None, audit_path: str = None, verbose: bool = 
 
 # ----------------- Config -----------------
 def load_yaml(path: str) -> Dict[str, Any]:
-    """
-    Carga un fichero de configuración YAML de forma segura.
-    """
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 def load_json(path: str) -> Dict[str, Any]:
-    """
-    Carga un fichero JSON.
-    """
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 # ----------------- SQLite State -----------------
 class StateDB:
-    """
-    Gestiona la base de datos de estado para el script.
-    """
     def __init__(self, path: str):
         self.path = path
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -138,7 +128,7 @@ class StateDB:
     def mark_processed(self, msg_id: str, message_date: str, event_ids: List[str]):
         c = self.conn.cursor()
         c.execute("INSERT OR REPLACE INTO processed VALUES (?,?,?,?)",
-                  (msg_id, message_date, datetime.utcnow().isoformat(), json.dumps(event_ids)))
+                  (msg_id, message_date, datetime.now(timezone.utc).isoformat(), json.dumps(event_ids)))
         self.conn.commit()
 
     def get_ip(self, ip: str) -> Optional[Dict[str, Any]]:
@@ -150,7 +140,7 @@ class StateDB:
     def set_ip(self, ip: str, country: str, abuse_score: Optional[int]):
         c = self.conn.cursor()
         c.execute("INSERT OR REPLACE INTO ip_cache(ip, country, abuse_score, checked_at) VALUES (?,?,?,?)",
-                  (ip, country or "", int(abuse_score) if abuse_score is not None else None, datetime.utcnow().isoformat()))
+                  (ip, country or "", int(abuse_score) if abuse_score is not None else None, datetime.now(timezone.utc).isoformat()))
         self.conn.commit()
 
     def close(self):
@@ -164,9 +154,6 @@ RE_SHA256 = re.compile(r'\b[a-fA-F0-9]{64}\b')
 RE_EMAIL  = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
 
 def is_ip_whitelisted(ip: str, whitelist_ranges: List[str]) -> bool:
-    """
-    Verifica si una IP está en un rango privado o en una lista blanca personalizada.
-    """
     try:
         ip_obj = ipaddress.ip_address(ip)
         if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
@@ -179,9 +166,6 @@ def is_ip_whitelisted(ip: str, whitelist_ranges: List[str]) -> bool:
     return False
 
 def extract_iocs_free_text(text: str) -> Dict[str, List[str]]:
-    """
-    Extrae IOCs de una cadena de texto libre usando expresiones regulares.
-    """
     t = text.replace("hxxp://", "http://").replace("hxxps://", "https://")
     t = re.sub(r'<[^>]+>', ' ', t)
     return {
@@ -194,7 +178,6 @@ def extract_iocs_free_text(text: str) -> Dict[str, List[str]]:
 
 # ----------------- Email Processing -----------------
 class IMAPClient:
-    """Un cliente para conectarse a un servidor IMAP y obtener correos."""
     def __init__(self, host, user, password, mailbox="INBOX", port=993, ssl_verify=True):
         self.host, self.user, self.password = host, user, password
         self.mailbox, self.port, self.ssl_verify = mailbox, port, ssl_verify
@@ -209,7 +192,7 @@ class IMAPClient:
                     ctx.verify_mode = ssl.CERT_NONE
                 self.M = imaplib.IMAP4_SSL(self.host, self.port, ssl_context=ctx)
                 self.M.login(self.user, self.password)
-                self.M.select(self.mailbox)
+                self.M.select(f'"{self.mailbox}"') # Importante: entrecomillar el mailbox
                 logging.info("IMAP connection successful")
                 return
             except Exception as e:
@@ -221,12 +204,10 @@ class IMAPClient:
         msgs = []
         try:
             typ, data = self.M.search(None, 'UNSEEN')
-            if typ != 'OK':
-                return msgs
+            if typ != 'OK': return msgs
             for num in data[0].split():
                 typ, msgdata = self.M.fetch(num, '(RFC822)')
-                if typ != 'OK':
-                    continue
+                if typ != 'OK': continue
                 raw = msgdata[0][1]
                 msg = email.message_from_bytes(raw)
                 msgs.append(msg)
@@ -243,19 +224,12 @@ class IMAPClient:
             pass
 
 def msg_id_or_hash(msg: email.message.Message) -> str:
-    """
-    Obtiene el 'Message-ID' de un correo, o calcula un hash SHA1 como alternativa.
-    """
     mid = msg.get("Message-ID")
-    if mid:
-        return mid
+    if mid: return mid
     raw = msg.as_bytes()
     return hashlib.sha1(raw).hexdigest()
 
 def parse_email_parts(msg: email.message.Message) -> Dict[str, Any]:
-    """
-    Analiza un objeto de correo para extraer asunto, fecha, cuerpo y adjuntos CSV.
-    """
     subject_raw = msg.get("Subject", "")
     decoded_header = decode_header(subject_raw)
     subject = decoded_header[0][0]
@@ -278,17 +252,12 @@ def parse_email_parts(msg: email.message.Message) -> Dict[str, Any]:
         if payload: body_texts.append(payload.decode(msg.get_content_charset() or 'utf-8', 'ignore'))
 
     return {
-        "subject": subject,
-        "date": msg.get("Date", ""),
-        "body_text": "\n".join(body_texts),
-        "csv_attachments": csv_files
+        "subject": subject, "date": msg.get("Date", ""),
+        "body_text": "\n".join(body_texts), "csv_attachments": csv_files
     }
 
 # ----------------- CSV and Detection Logic -----------------
 def iter_csv_rows(file_bytes: bytes) -> Iterable[Dict[str, str]]:
-    """
-    Itera sobre las filas de un fichero CSV proporcionado como bytes.
-    """
     try:
         decoded_file = file_bytes.decode("utf-8")
     except UnicodeDecodeError:
@@ -306,30 +275,18 @@ _COMPILED_PATTERNS = [
 ]
 
 def classify_row_from_message(message: str) -> Tuple[str, Optional[str]]:
-    """
-    Clasifica una fila de CSV basándose en el contenido de su celda de mensaje.
-    """
     for det, rx in _COMPILED_PATTERNS:
         m = rx.search(message or "")
-        if m:
-            return det, (m.group("ip") if "ip" in rx.groupindex else None)
+        if m: return det, (m.group("ip") if "ip" in rx.groupindex else None)
     return "suspicious_activity", None
 
 def get_first_from_row(row: Dict[str, str], header_aliases: Dict[str, List[str]], logical_name: str) -> str:
-    """
-    Obtiene el valor de una columna lógica en una fila de CSV usando alias.
-    """
     for alias in header_aliases.get(logical_name, []):
-        if alias in row and row[alias]:
-            return row[alias]
+        if alias in row and row[alias]: return row[alias]
     return ""
 
 def iocs_from_row(row: Dict[str, str], header_aliases: Dict[str, List[str]], add_dst_ip: bool) -> Dict[str, List[str]]:
-    """
-    Extrae IOCs de una fila de CSV.
-    """
     iocs = { "ipv4": [], "ipv4-dst": [], "domains": [], "urls": [], "sha256": [], "emails": [] }
-    
     src_ip = get_first_from_row(row, header_aliases, "src_ip")
     dst_ip = get_first_from_row(row, header_aliases, "dst_ip")
     message = get_first_from_row(row, header_aliases, "message")
@@ -346,9 +303,6 @@ def iocs_from_row(row: Dict[str, str], header_aliases: Dict[str, List[str]], add
     return iocs
 
 def classify_detection(subject: str, body: str) -> str:
-    """
-    Clasifica una detección basándose en el asunto y cuerpo de un email.
-    """
     text = f"{subject}\n{body}".lower()
     if any(s in text for s in ["brute force", "fuerza bruta", "failed login"]): return "brute_force"
     if any(s in text for s in ["port scan", "escaneo de puertos", "nmap"]): return "port_scan"
@@ -360,9 +314,6 @@ def classify_detection(subject: str, body: str) -> str:
 
 # ----------------- Enrichment Services -----------------
 def geoip_country(ip: str, cfg: dict, state: StateDB) -> str:
-    """
-    Obtiene el código de país de una IP, usando una caché local.
-    """
     cached = state.get_ip(ip)
     if cached and cached.get("country"): return cached["country"]
 
@@ -380,9 +331,6 @@ def geoip_country(ip: str, cfg: dict, state: StateDB) -> str:
     return country
 
 def abuseipdb_score(ip: str, cfg: dict, state: StateDB) -> Optional[int]:
-    """
-    Consulta la puntuación de reputación de una IP en AbuseIPDB.
-    """
     cached = state.get_ip(ip)
     if cached and cached.get("abuse_score") is not None:
         return int(cached["abuse_score"])
@@ -412,7 +360,6 @@ def abuseipdb_score(ip: str, cfg: dict, state: StateDB) -> Optional[int]:
 
 # ----------------- MISP API Client -----------------
 class MISPClient:
-    """Un cliente para interactuar con la API de MISP."""
     def __init__(self, url: str, api_key: str, verify_ssl: bool = True, rate_sleep: float = 0.3):
         self.url = url.rstrip("/")
         self.headers = {"Authorization": api_key, "Accept": "application/json", "Content-Type": "application/json"}
@@ -460,9 +407,6 @@ class MISPClient:
 
 # ----------------- Mapping & Template Rendering -----------------
 def map_detection(mappings: Dict[str, Any], detection_key: str, ioc_value: str, extra: Dict[str, Any], row_data: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """
-    Mapea una clave de detección a una plantilla de evento/atributo MISP.
-    """
     defaults = mappings.get("defaults", {})
     m = mappings.get(detection_key, {})
     
@@ -478,15 +422,11 @@ def map_detection(mappings: Dict[str, Any], detection_key: str, ioc_value: str, 
         comment = comment.replace(placeholder, str(val))
 
     return {
-        "event_info": info,
-        "attr_comment": comment,
+        "event_info": info, "attr_comment": comment,
         "tags": list(set(defaults.get("base_tags", []) + m.get("tags", []))),
-        "misp_type": m.get("misp_type", "comment"),
-        "category": m.get("category", "Other"),
-        "to_ids": m.get("to_ids", 0),
-        "distribution": defaults.get("distribution", 1),
-        "threat_level_id": defaults.get("event_threat_level_id", 4),
-        "analysis": defaults.get("event_analysis", 0),
+        "misp_type": m.get("misp_type", "comment"), "category": m.get("category", "Other"),
+        "to_ids": m.get("to_ids", 0), "distribution": defaults.get("distribution", 1),
+        "threat_level_id": defaults.get("event_threat_level_id", 4), "analysis": defaults.get("event_analysis", 0),
         "tlp": m.get("tlp", defaults.get("tlp", "green")),
         "workflow_state": m.get("workflow_state", "incomplete"),
         "workflow_todo": m.get("workflow_todo", "unknown"),
@@ -496,9 +436,6 @@ def map_detection(mappings: Dict[str, Any], detection_key: str, ioc_value: str, 
 
 # ----------------- Main Processing Pipeline -----------------
 def process_once(cfg, mappings, state: StateDB, dry_run=False):
-    """
-    Ejecuta un ciclo completo del pipeline de ingesta.
-    """
     audit_log = logging.getLogger("audit")
     
     imap = IMAPClient(
@@ -524,7 +461,7 @@ def process_once(cfg, mappings, state: StateDB, dry_run=False):
     header_aliases = cfg.get("CSV_HEADER_ALIASES", {})
     whitelist_ranges = cfg.get("POLICY",{}).get("WHITELIST_RANGES", [])
     add_dst_ip = cfg["POLICY"].get("ADD_DST_IP", True)
-    base_date = datetime.utcnow().date().isoformat()
+    base_date = datetime.now(timezone.utc).date().isoformat()
 
     for msg in messages:
         mid = msg_id_or_hash(msg)
@@ -534,7 +471,6 @@ def process_once(cfg, mappings, state: StateDB, dry_run=False):
 
         logging.info("Processing message: %s", mid)
         parts = parse_email_parts(msg)
-        subject, date_hdr, body = parts["subject"], parts["date"], parts["body_text"]
         
         units: List[Dict[str, Any]] = []
 
@@ -548,29 +484,36 @@ def process_once(cfg, mappings, state: StateDB, dry_run=False):
             except Exception as e:
                 logging.error("Failed to read CSV attachment: %s", e, exc_info=True)
 
-        iocs_body = extract_iocs_free_text(body)
+        iocs_body = extract_iocs_free_text(parts["body_text"])
         if any(iocs_body.values()):
-            det_body = classify_detection(subject, body)
+            det_body = classify_detection(parts["subject"], parts["body_text"])
             units.append({"src": "body", "det": det_body, "ip_hint": None, "iocs": iocs_body, "row": None})
 
         if not units:
             logging.warning("No IOCs found in message %s. Marking as processed.", mid)
-            if not dry_run: state.mark_processed(mid, date_hdr, [])
+            if not dry_run: state.mark_processed(mid, parts["date"], [])
             continue
 
-        buckets: Dict[str, List[Tuple[str,str,dict]]] = {}
+        buckets: Dict[str, List[Tuple[str, str, Optional[dict]]]] = {}
         for u in units:
-            flat_iocs: List[Tuple[str,str,dict]] = []
             for ioc_type, values in u["iocs"].items():
-                for value in values: flat_iocs.append((ioc_type, value, u.get("row")))
-            if not flat_iocs and u["ip_hint"]: flat_iocs.append(("ipv4", u["ip_hint"], u.get("row")))
-            if flat_iocs: buckets.setdefault(u["det"], []).extend(flat_iocs)
+                for value in values:
+                    buckets.setdefault(u["det"], []).append((ioc_type, value, u.get("row")))
 
         event_ids_created = []
         for det_key, iocs_with_context in buckets.items():
-            unique_iocs = sorted(list(set(iocs_with_context)))
+            
+            unique_iocs = []
+            seen = set()
+            for ioc_type, value, row_data in iocs_with_context:
+                key = (ioc_type, value)
+                if key not in seen:
+                    unique_iocs.append((ioc_type, value, row_data))
+                    seen.add(key)
+
             for i in range(0, len(unique_iocs), max_attrs):
                 chunk = unique_iocs[i:i + max_attrs]
+                if not chunk: continue
                 first_ioc, first_row = chunk[0][1], chunk[0][2]
                 
                 ctx = map_detection(mappings, det_key, first_ioc, {"feed":"fw-mail"}, row_data=first_row)
@@ -634,6 +577,9 @@ def process_once(cfg, mappings, state: StateDB, dry_run=False):
                         continue
 
                     if dry_run:
+                        # Loguea el atributo simulado en modo legible si está activado
+                        if cfg.get("HUMAN_LOGS"):
+                            logging.info("DRY-RUN: Would add attribute -> type=%s, value=%s, to_ids=%s", attr_type, val, bool(to_ids))
                         audit_log.info('DRY-RUN,ADD_ATTRIBUTE,%s,%s,%s,%s', mid, ev_id, attr_type, val)
                     else:
                         try:
@@ -642,31 +588,33 @@ def process_once(cfg, mappings, state: StateDB, dry_run=False):
                             audit_log.error('FAILURE,ADD_ATTRIBUTE,%s,%s,%s,%s,"%s"', mid, ev_id, attr_type, val, str(e))
 
         if not dry_run:
-            state.mark_processed(mid, date_hdr, event_ids_created)
+            state.mark_processed(mid, parts["date"], event_ids_created)
 
     imap.logout()
 
 def main():
-    """
-    Punto de entrada principal del script.
-    """
     ap = argparse.ArgumentParser(description="IMAP to MISP ingestor (CSV + body)")
     ap.add_argument("--config", "-c", default="config.yaml", help="Path to config YAML")
     ap.add_argument("--mappings", "-m", default="mappings.json", help="Path to mappings JSON")
     ap.add_argument("--dry-run", action="store_true", help="Simulate actions without writing to MISP")
     ap.add_argument("--once", action="store_true", help="Run a single pass and exit (for timers)")
     ap.add_argument("--verbose", "-v", action="store_true")
+    ap.add_argument("--human-logs", action="store_true", help="Print human-readable logs to the console")
     args = ap.parse_args()
 
     try:
         cfg = load_yaml(args.config)
     except FileNotFoundError:
-        logging.critical("Config file not found at %s. Exiting.", args.config)
+        # No usar logging aquí porque aún no está configurado
+        print(f"CRITICAL: Config file not found at {args.config}. Exiting.", file=sys.stderr)
         sys.exit(1)
     
+    # Añadir el flag al dict de config para acceso global
+    cfg['HUMAN_LOGS'] = args.human_logs
+
     log_path = cfg.get("LOGGING", {}).get("PATH")
     audit_path = cfg.get("LOGGING", {}).get("AUDIT_PATH")
-    setup_logging(log_path=log_path, audit_path=audit_path, verbose=args.verbose)
+    setup_logging(log_path=log_path, audit_path=audit_path, verbose=args.verbose, human_readable=args.human_logs)
 
     if not os.environ.get("IMAP_PASS"): logging.warning("IMAP_PASS environment variable not set.")
     if not os.environ.get("MISP_API_KEY"): logging.warning("MISP_API_KEY environment variable not set.")
