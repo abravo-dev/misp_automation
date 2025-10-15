@@ -21,16 +21,16 @@ Está diseñado para correr como un servicio `systemd` bajo un usuario sin privi
 
 Sigue estos pasos en la VM de MISP como usuario `root`.
 
-**1. Crear Usuario de Servicio**
-
-```bash
-sudo bash scripts/create_service_user.sh
-```
-
-**2. Clonar Repositorio y Configurar Entorno**
+**1. Clonar Repositorio**
 
 ```bash
 sudo git clone <URL_DEL_REPO> /opt/misp-mail-ingestor
+```
+
+**2. Crear Usuario de Servicio y Configurar Entorno**
+
+```bash
+sudo bash scripts/create_service_user.sh
 cd /opt/misp-mail-ingestor
 sudo chown -R misp-automation:misp-automation /opt/misp-mail-ingestor
 sudo -u misp-automation bash scripts/venv_setup.sh
